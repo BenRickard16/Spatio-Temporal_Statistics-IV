@@ -216,6 +216,100 @@ plot( svgm.tmp )
 
 
 
+## 4. Specification and Fit of the Parametric Semivariogram Model
+
+# Bit tricky but the main steps are:
+# 1 Compute a sample semivariogram given data as previously
+# 2 Specify the parametric form of the semivariogram model
+# 3 calibrate/estimate/fit the specified parameter semivariogram against the computed sample semivariogram
+
+
+## 4.1. Step 2: Specification of the Parametric Semivariogram Model
+
+# Specifies parametric semivariogram model resulting by adding several standard semivariogram models
+# 1. Specify the semivariogram model
+vgm.tmp <- vgm(psill = 0.5, model = 'Nug', range = 0)
+
+vgm.tmp <- vgm(psill = 1, model = 'Sph', range = 300, add.to = vgm.tmp)
+
+vgm.tmp <- vgm(psill = 0.8, model = 'Sph', range = 800, add.to = vgm.tmp)
+
+print(vgm.tmp)
+
+
+## 4.2 Step : Fit the Parametric Semivariogram Model Against the Sample Semivariogram
+
+# Fit the semivariogram model against the sample variogram via weighted least squares
+library(sp)
+library(sf)
+# 0 Get the data as sf object
+data(meuse)
+meuse.df <- meuse
+meuse.sf <- st_as_sf(meuse.df, 
+                     coords = c("x", "y"),      # specify which columns are the coordinates
+                     crs = 28992  # CRS code
+)
+# 1 Specify the semi variogram model
+smpl.vgm <- variogram(object = log(zinc) ~ 1 + sqrt(dist), # formula associated to the trend
+                      data = meuse.sf,           # data frame
+)
+vgm.obj <- vgm(psill = 0.5,
+               model = "Nug", 
+               range = 0
+)
+vgm.obj <- vgm(psill = 1,                   # the value "=1" is just an initial value
+               model = "Sph",
+               range = 300,
+               add.to = vgm.obj
+)
+# 2 Fit the semi variogram model against the sample variogram
+est.vgm <- fit.variogram(object = smpl.vgm, # sample variogram, output of variogram
+                         model = vgm.obj    # variogram model, output of vgm
+)
+# 3 Print the estimated values for the parameters of the semi variogram model   
+print(est.vgm)
+
+
+## Task: consider the dataset in object jura.pred where Cadmium is quantity of interest. Want to fit a semivariogram nugget + exponential. Assume isotropy and the
+# sample variogram with cutoff distance equal to 1.5 and width 0.1
+# Load the data
+library(sp)
+library(sf)
+library(gstat)
+
+data(jura)
+jura.pred.df <- as.data.frame(jura.pred)
+jura.pred.sf <- st_as_sf(jura.pred.df, 
+                         coords = c("long", "lat"),      # specify which columns are the coordinates
+                         crs = 4326  # CRS code
+)
+
+# Step 1
+smpl.vgm <- variogram(object = log(Cd) ~ 1 , # formula defining the response vector and (possible) regressors
+                      data = jura.pred.sf,            # data frame
+                      cutoff = 1.5,              # spatial separation distance up to which point pairs are included in semivariance estimates
+                      width = 0.1                  # the width of subsequent distance intervals into which data point pairs are grouped for semivariance estimates
+)
+# Step 2
+vgm.model <- vgm(psill = 0.1,
+                 model = "Nug", 
+                 range = 0
+)
+vgm.model <- vgm(psill = 0.5,
+                 model = "Exp",
+                 range = 1.5,
+                 add.to = vgm.model
+)
+print(vgm.model)
+
+# Step 3
+est.vgm.model <- fit.variogram(object = smpl.vgm, # sample variogram, output of variogram
+                               model = vgm.model    # variogram model, output of vgm
+)
+
+print(est.vgm.model)
+plot(est.vgm.model, 
+     cutoff = 1.9)
 
 
 
