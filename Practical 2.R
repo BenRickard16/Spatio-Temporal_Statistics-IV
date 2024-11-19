@@ -313,6 +313,352 @@ plot(est.vgm.model,
 
 
 
+## 5. Spatial Prediction by Kriging
+
+# Main steps for universal and simple Kriging:
+# 1 Specify semivariogram model and fit against sample semivariogram estimate
+# 2 Train geostatistical model
+# 3 Compute predictive mean and variance at unseen points
+
+
+## 5.1. Train Geostatistical Model
+
+library(sp)
+library(sf)
+# 1 Get the data as sf object
+data(meuse)
+meuse.df <- meuse
+meuse.sf <- st_as_sf(meuse.df, 
+                     coords = c("x", "y"),      # specify which columns are the coordinates
+                     crs = 28992)  # CRS code
+
+# 2 Compute the semivariogram estimate
+svgm.tmp <- variogram(object = log(zinc) ~ 1 + sqrt(dist), # formula defining the response vector and (possible) regressors
+                      data = meuse.sf,               # data frame
+                      alpha = c(45),              # direction in plane (x,y),
+                      cutoff = 1000,              # spatial separation distance up to which point pairs are included in semivariance estimates
+                      width = 50)                  # the width of subsequent distance intervals into which data point pairs are grouped for semivariance estimates
+
+# Set the formula of the trend  
+frml <- log(zinc) ~ 1 + sqrt(dist)
+
+# Estimate the variogram  
+smpl.vgm <- variogram(object = frml, 
+                      data = meuse.sf)
+
+par.vgm.0 <- vgm(psill = 0.5,
+                 model = "Nug", 
+                 range = 0)
+
+par.vgm.1 <- vgm(psill = 1,
+                 model = "Sph",
+                 range = 300,
+                 add.to = par.vgm.0)
+
+par.vgm.est <- fit.variogram(object = smpl.vgm, 
+                             model = par.vgm.1)
+
+# Compute the Kriging equations
+uni.krige.est <- gstat( formula = frml,
+                        data = meuse.sf, 
+                        model = par.vgm.est)
+
+# Summary
+summary(uni.krige.est)
+
+
+## 5.2. Compute Predictive Mean and Variance
+
+# Following script computes predictive mean and variance at unseen locations
+# 0 Get the data => from previous script
+# 1 Train the geostatistical model => from the previous script
+# 2.1 Get the unseen locations  
+data(meuse.grid)
+meuse.grid.df <- meuse.grid
+meuse.grid.sf <- st_as_sf(meuse.grid.df, 
+                          coords = c("x", "y"),      # specify which columns are the coordinates
+                          crs = 28992)  # CRS code
+
+# 2.2 Compute the predictions at the unseen locations
+uni.krige.prd <- predict(object = uni.krige.est, # object of class gstat; output of gstat()
+                         newdata = meuse.grid.sf)   # data frame with prediction locations
+
+# 2.3 Print summaries
+print(uni.krige.prd)
+summary(uni.krige.prd)
+
+
+# 2.4 Plot predictions
+library(mapview)
+mapview(uni.krige.prd, zcol='var1.pred', layer.name = 'predicted mean')
+mapview(uni.krige.prd, zcol='var1.var', layer.name = 'predicted variance')
+
+# For dataset jura.pred, quantity of interest is cadmium. Deterministic trend is 0.1 (simple Kriging). Semivariogram
+# has a nugget plus exponential. Compute predictive mean and variance at unseen locations in jura.grid
+
+# Getting the data and libraries
+library(sp)
+library(sf)
+library(gstat)
+data(jura)
+jura.pred.df <- as.data.frame(jura.pred)
+jura.pred.sf <- st_as_sf(jura.pred.df, coords = c('long', 'lat'), crs=4326)
+
+jura.grid.df <- as.data.frame(jura.grid)
+jura.grid.sf <- st_as_sf(jura.grid.df, coords = c('long', 'lat'), crs=4326)
+
+# Setting formula of the trend
+frml <- log(Cd) ~ 1
+
+# Estimate semivariogram
+smpl.vgm <- variogram(object = frml, data=jura.pred.sf)
+
+par.vgm.model <- vgm(psill = 0.1, model = 'Nug', range=0)
+par.vgm.model <- vgm(psill=0.5, model = 'Exp', range=1.5, add.to = par.vgm.model)
+
+par.vgm.est <- fit.variogram(object=smpl.vgm, model = par.vgm.model)
+
+# Compute Kriging equations
+sim.krige.est <- gstat(formula = frml, data = jura.pred.sf, model = par.vgm.est, 
+                       beta=c(0.1)) # vector for simple kriging with trend coeffs
+
+krige.prd <- predict(object = sim.krige.est, newdata = jura.grid.sf)
+
+# Plotting
+mapview(krige.prd, zcol='var1.pred', layer.name = 'predicted mean')
+mapview(krige.prd, zcol='var1.var', layer.name = 'predicted variance')
+
+
+
+## 6. Cross Validation
+
+# The following script:
+# 1 Trains a geostatistical model and saves training output in krige.fit
+# 2 Calculates z-scores of a 5-fold cv
+# 3 Plots the z-scores
+
+library(sp)
+library(sf)
+# 0 Get the data as sf object
+data(meuse)
+meuse.df <- meuse
+meuse.sf <- st_as_sf(meuse.df, 
+                     coords = c("x", "y"),      # specify which columns are the coordinates
+                     crs = 28992)  # CRS code
+
+# 1 train the geostatistical model 
+# Set the formula of the trend  
+frml <- log(zinc) ~ 1 + sqrt(dist)
+# Estimate the variogram  
+smpl.vgm <- variogram(object = frml, 
+                      data = meuse.sf)
+
+par.vgm.0 <- vgm(psill = 0.5,
+                 model = "Nug", 
+                 range = 0)
+
+par.vgm.1 <- vgm(psill = 1,
+                 model = "Sph",
+                 range = 300,
+                 add.to = par.vgm.0)
+
+par.vgm.est <- fit.variogram(object = smpl.vgm, 
+                             model = par.vgm.1)
+
+# Train  the model
+krige.fit <- gstat( formula = frml,
+                    data = meuse.sf, 
+                    model = par.vgm.est)
+
+# 2 Perform n-fold Cross Validation
+nf.cv = gstat.cv(krige.fit,    # object of class gstat
+                 nfold = 5)
+
+# 3 Plot z-scores
+bubble(obj = nf.cv['zscore'])
+
+
+# Now we perform a 2-fold cv for the jura.pred Cadmium data with same deterministic trend and semviariogram parameterisation
+# Load the data
+library(sp)
+library(sf)
+library(gstat)
+data(jura)
+jura.pred.df <- as.data.frame(jura.pred)
+jura.pred.sf <- st_as_sf(jura.pred.df, 
+                         coords = c("long", "lat"),      # specify which columns are the coordinates
+                         crs = 4326)  # CRS code
+
+jura.grid.df <- as.data.frame(jura.grid)
+jura.grid.sf <- st_as_sf(jura.grid.df, 
+                         coords = c("long", "lat"),      # specify which columns are the coordinates
+                         crs = 4326)  # CRS code
+
+# Set the formula of the trend  
+frml <- log(Cd) ~ 1
+
+# Estimate the variogram  
+smpl.vgm <- variogram(object = frml, 
+                      data = jura.pred.sf)
+
+par.vgm.model <- vgm(psill = 0.1,
+                     model = "Nug", 
+                     range = 0.0)
+
+par.vgm.model <- vgm(psill = 0.5,
+                     model = "Exp", 
+                     range = 1.5,
+                     add.to = par.vgm.model)
+
+par.vgm.est <- fit.variogram(object = smpl.vgm, 
+                             model = par.vgm.model)
+
+# Compute the Kriging equations
+sim.krige.est <- gstat( formula = frml,
+                        data = jura.pred.sf, 
+                        model = par.vgm.est,
+                        beta = c(0.1)) #for simple kriging, vector with the trend coefficients (including intercept)  
+
+# 2 Perform n-fold Cross Validation
+nf.cv = gstat.cv(sim.krige.est,    # object of class gstat
+                 nfold = 2)
+
+# 3 Plot the z-scores
+bubble(obj = nf.cv["zscore"])
+
+# 4. I observe that at some locations the z-scores are way too large, e.g. larger than +/-3. Perhaps the fitting is not 
+# the best, and the model has to be reconsidered by using different parametric semivariogram or by using different  
+# different trend or by including additional covariates.  
+
+
+
+## 7. Change of Support (Block Kriging)
+
+# The following script computes and prints block Kriging prediction for blocks size 50x50 given spatial locations meuse.grid
+library(sp)
+library(sf)
+
+# 1 Get data as sf object
+data(meuse)
+meuse.df <- meuse
+meuse.sf <- st_as_sf(meuse.df, coords = c('x', 'y'), crs=28992)
+
+# Set formula of trend
+frml <- log(zinc) ~ 1 + sqrt(dist)
+
+# Estimate the variogram
+smpl.vgm <- variogram(object = frml, 
+                      data = meuse.sf)
+
+par.vgm.0 <- vgm(psill = 0.5,
+                 model = "Nug", 
+                 range = 0)
+
+par.vgm.1 <- vgm(psill = 1,
+                 model = "Sph",
+                 range = 300,
+                 add.to = par.vgm.0)
+
+par.vgm.est <- fit.variogram(object = smpl.vgm, 
+                             model = par.vgm.1)
+
+# Compute Kriging equations
+krige.est <- gstat(formula = frml, locations = meuse.sf, model = par.vgm.est)
+
+# New locations
+data(meuse.grid)
+meuse.grid.df <- meuse.grid
+meuse.grid.sf <- st_as_sf(meuse.grid.df, 
+                          coords = c("x", "y"),      # specify which columns are the coordinates
+                          crs = 28992)  # CRS code
+
+# Kriging predictions
+krige.prd <- predict(object = krige.est, newdata = meuse.grid.sf, block = c(50,50))
+
+# Plotting
+mapview(krige.prd, zcol='var1.pred', layer.name='predicted mean')
+mapview(krige.prd, zcol='var1.var', layer.name='predicted variance')
+
+
+# If we instead work with blocks of circular shape radius 20, centered on the points of meuse.grid
+xy <- expand.grid(x = seq(-20, 20, 4), y = seq(-20, 20,4))
+xy <- xy[(xy$x^2 + xy$y^2) <= 20^2, ]
+krige.prd <- predict(object = krige.est,      # object of class gstat; output of gstat()
+                     newdata = meuse.grid.sf, # data frame with prediction locations
+                     block = xy)
+
+# Plotting
+mapview(krige.prd, zcol='var1.pred', layer.name='predicted mean')
+mapview(krige.prd, zcol='var1.var', layer.name='predicted variance')
+
+
+
+## 8. Multivariate Geostatistics
+
+# Multiple dependent spatial variables and analysed jointly
+# Need to organise the available information which is done sequentially using the function gstat
+library(sp)
+library(sf)
+# 0 Get the data as sf object
+data(meuse)
+meuse.df <- meuse
+meuse.sf <- st_as_sf(meuse.df,
+                     coords = c("x", "y"),      # specify which columns are the coordinates
+                     crs = 28992)  # CRS code
+
+# 1 organize the multivarioate response
+gstat.obj <- NULL
+gstat.obj <- gstat(g = gstat.obj,
+                   id = "logCA",
+                   formula = log(cadmium) ~ 1,
+                   data = meuse.sf)
+
+gstat.obj <- gstat(g = gstat.obj,
+                   id = "logCO",
+                   formula = log(copper) ~ 1,
+                   data = meuse.sf)
+
+gstat.obj <- gstat(g = gstat.obj,
+                   id = "logLE",
+                   formula = log(lead) ~ 1,
+                   data = meuse.sf)
+
+gstat.obj <- gstat(g = gstat.obj,
+                   id = "logZI",
+                   formula = log(zinc) ~ 1,
+                   data = meuse.sf)
+
+gstat.obj
+
+# Computing and plotting sample semivariogram
+smpl.svg <- variogram(object = gstat.obj)
+plot(smpl.svg)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
