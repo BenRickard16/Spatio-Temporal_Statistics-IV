@@ -606,7 +606,7 @@ meuse.sf <- st_as_sf(meuse.df,
                      coords = c("x", "y"),      # specify which columns are the coordinates
                      crs = 28992)  # CRS code
 
-# 1 organize the multivarioate response
+# 1 organize the multivariate response
 gstat.obj <- NULL
 gstat.obj <- gstat(g = gstat.obj,
                    id = "logCA",
@@ -634,39 +634,134 @@ gstat.obj
 smpl.svg <- variogram(object = gstat.obj)
 plot(smpl.svg)
 
+# Function fit.lmc fits a Linear Model of Coregionalisation to a multivariable sample variogram
+vm.fit <- gstat::fit.lmc(v = smpl.svg,          # multivariate sample variogram
+                         g = gstat.obj,         # gstat object, output of gstat
+                         model = vgm(1, 'Sph', 800, 1))   # variogram model, output of vgm
+
+# Plot sample and parametric cross semivariogram in same plot
+plot(smpl.svg, vm.fit)
+
+# Computing cokriging predictions of all the response variables at locations in meuse.grid and plots
+data(meuse.grid)
+meuse.grid.df <- meuse.grid
+meuse.grid.sf <- st_as_sf(meuse.grid.df, coords = c('x', 'y'), crs = 28992)
+
+cok.maps <- predict(vm.fit, meuse.grid.sf)
+
+library(ggplot2)
+library(viridisLite)
+
+ggplot() +
+  geom_sf(data = cok.maps, aes(color = logZI.pred)) +
+  scale_color_viridis_c(name = 'log(ZI)') + theme_bw()
+
+ggplot() + 
+  geom_sf(data = cok.maps, aes(color = logZI.var)) +
+  scale_color_viridis_c(name = "log(ZI) variance") + theme_bw()
+
+ggplot() + 
+  geom_sf(data = cok.maps, aes(color = logLE.pred)) +
+  scale_color_viridis_c(name = "log(LE)") + theme_bw()
+
+ggplot() + 
+  geom_sf(data = cok.maps, aes(color = logLE.var)) +
+  scale_color_viridis_c(name = "log(LE) variance") + theme_bw()
+
+mapview(cok.maps,             # Object of class SpatialPixelsDataFrame
+        zcol = "logZI.pred")      # vector of characters with the attribute name(s)
+        
+mapview(cok.maps,             # Object of class SpatialPixelsDataFrame
+        zcol = "logLE.pred")      # vector of characters with the attribute name(s)
+        
+mapview(cok.maps,             # Object of class SpatialPixelsDataFrame
+        zcol = "logZI.var")      # vector of characters with the attribute name(s)
+        
+mapview(cok.maps,             # Object of class SpatialPixelsDataFrame
+        zcol = "logLE.var")      # vector of characters with the attribute name(s)
 
 
 
+# From jura dataset coords long and lat, consider responses with order Ni, Pb, Zn and do
+# 1 Compute multivariable sample variogram and plot
+# 2 Fit a LMC to multivariable sample variogram and plot choosing any parametric semivariogram
+# 3 Compute cokriging predictions of all the response variables at locations in jura.grid
+library(sp)
+library(sf)
+library(gstat)
+# 0 Get the data as sf object
+data(jura)
+jura.pred.df <- as.data.frame(jura.pred)
+jura.pred.sf <- st_as_sf(jura.pred.df, 
+                         coords = c("long", "lat"), 
+                         crs = 4326)
 
+# 0 organize the multivariate response
+gstat.obj <- NULL
+gstat.obj <- gstat(g = gstat.obj,
+                   id = "logNi",
+                   formula = log(Ni) ~ 1,
+                   data = jura.pred.sf)
 
+gstat.obj <- gstat(g = gstat.obj,
+                   id = "logPb",
+                   formula = log(Pb) ~ 1,
+                   data = jura.pred.sf)
 
+gstat.obj <- gstat(g = gstat.obj,
+                   id = "logZn",
+                   formula = log(Zn) ~ 1,
+                   data = jura.pred.sf)
 
+gstat.obj
 
+# 1
+smpl.svg <- variogram(object = gstat.obj)
+plot(smpl.svg)
 
+# 2
+vm.fit <- gstat::fit.lmc(v = smpl.svg, 
+                         g = gstat.obj, 
+                         model = vgm(1, "Sph", 300, 1) )
 
+plot(smpl.svg, vm.fit)
 
+# 3
+jura.grid.df <- jura.grid
+jura.grid.sf <- st_as_sf(jura.grid.df,
+                         coords = c("long", "lat"),  
+                         crs = 4326 )
 
+cok.maps <- predict( vm.fit, 
+                     jura.grid.sf)
 
+library(ggplot2)
+library(viridisLite)
+ggplot() + 
+  geom_sf(data = cok.maps, aes(color = logNi.pred)) +
+  scale_color_viridis_c(name = "log(Ni)") + theme_bw()
 
+ggplot() + 
+  geom_sf(data = cok.maps, aes(color = logNi.var)) +
+  scale_color_viridis_c(name = "log(Ni) variance") + theme_bw()
 
+ggplot() + 
+  geom_sf(data = cok.maps, aes(color = logPb.pred)) +
+  scale_color_viridis_c(name = "log(Pb)") + theme_bw()
 
+ggplot() + 
+  geom_sf(data = cok.maps, aes(color = logPb.var)) +
+  scale_color_viridis_c(name = "log(Pb) variance") + theme_bw()
 
+mapview(cok.maps,  
+      zcol = "logNi.pred")
 
+mapview(cok.maps,  
+      zcol = "logPb.pred")  
 
+mapview(cok.maps,  
+      zcol = "logNi.var")  
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+mapview(cok.maps,  
+      zcol = "logPb.var")  
 
