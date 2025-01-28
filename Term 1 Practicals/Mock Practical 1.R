@@ -222,6 +222,6 @@ tmap_mode("plot")
 tm_shape(nc.data) + 
   tm_polygons("signal_trend") 
 
-# Insert the fitte value to site CNTY_ID 1825, NAME Ashe to the data set
+# Insert the fitted value to site CNTY_ID 1825, NAME Ashe to the data set
 nc.sar.fit$fit$fitted.values[1]
 
