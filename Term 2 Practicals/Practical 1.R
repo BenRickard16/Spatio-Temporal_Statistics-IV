@@ -86,17 +86,21 @@ cardox
 tsplot(cardox, lwd=2, col=4, main='Mean Carbon Dioxide Level')
 
 # Detrend by applying convolutional linear filter
-dlcardox <- filter(cardox, c(-1/24, -1/12, -1/12, -1/12, -1/12, 11/12, -1/12, -1/12, -1/12, 
-                             -1/12, -1/12, -1/12, -1/24))
+f = c(1/24, rep(1/12, 11), 1/24)
+scardox = filter(cardox, f)
 
-tsplot(dlcardox, col=4, lwd=2, main = 'Deaseasonalised Mean Carbon Dioxide Level')
+tsplot(scardox, col=4, lwd=2, main = 'Deaseasonalised Mean Carbon Dioxide Level')
 
+# Estimating monthly seasonal effects
+dtcardox <- cardox- scardox
+se <- rowMeans(matrix(dtcardox, nrow=12), na.rm=TRUE)
 
+barplot(se, names.arg=c(month.name[3:12], month.name[1:2]), col=4)
 
 ## Question 3
 
 # Second order Markovian scalar linear Gaussian auto-regressive model - AR(2)
-set.seed(1)
+set.seed(42)
 tseries <- filter(rnorm(1000), c(1.5, -0.75), "rec", init=c(0,0))
 tsplot(tseries,
        type="p", pch=19, col=4, cex=0.5, ylab="Y_t",
@@ -108,7 +112,7 @@ mean(tseries)
 var(tseries)
 
 # Computing first few auto-correlations of the process
-acf(tseries, lag.max=50, plot=FALSE)
+acf(tseries, lag.max=5, plot=FALSE)
 
 # Reversing the time series and calculating empirical mean and variance
 revtseries <- replace(tseries, TRUE, rev(tseries))
@@ -124,19 +128,47 @@ acf(revtseries, lag.max=50, plot=FALSE)
 ## Question 4
 
 # Simulating 10,000 observations from a centred VAR(1) process
-phi = matrix(c(0.9, 0.2, -0.1, 0.8), ncol=2, byrow=TRUE)
-xList = Reduce(function(xi, z) phi %*% xi + rnorm(2), 
+phi <- matrix(c(0.9, 0.2, -0.1, 0.8), ncol=2, byrow=TRUE)
+xList <- Reduce(function(xi, z) phi %*% xi + rnorm(2), 
                rep(0, 9999), c(0, 0), acc=TRUE)
-x = t(sapply(xList, cbind))
+x <- t(sapply(xList, cbind))
 dim(x)
 
 # Computing eigenvalues of Phi to confirm stability
 abs(eigen(phi)$values)
 
 # Computing empirical covariance matrix, and compare to its theoretical value
-cov(x)
+var(x)
 
 library(netcontrol)
-dlyap(t(phi), diag(2))
+V <- dlyap(t(phi), diag(2))
 
-      
+# Compute a few empirical cross-correlations between the 2 components of the simulated time series
+ccf(x[,1], x[,2], lag.max=5, plot=FALSE)
+
+# Compare to theoretical values as suggested by stationary covariance function
+acfList = Reduce(function(m, z) m %*% t(phi), 1:5, V, acc=TRUE) # Auto-covariance matrices
+pos = sapply(acfList, function(m) m[2,1]) # cross-covariances for non-neg t
+neg = sapply(acfList, function(m) m[1,2]) # for non-positive t
+true_ccvf = c(rev(neg[-1]), pos) # cross-covariance function
+true_ccf = true_ccvf / sqrt(V[1,1]*V[2,2]) # cross-correlation function
+true_ccf
+
+# Reverse time series and confirm empirical variance matrix unchanged
+rx <- x[10000:1,]
+var(rx)
+
+# Investigate cross-correlations between components of reversed series
+ccf(rx[,1], rx[,2], lag.max=5, plot=FALSE)
+
+
+
+
+
+
+
+
+
+
+
+     
