@@ -84,21 +84,46 @@ acf2(x, max.lag=6)
 
 
 
-
-
-
-
-
 ## Question 2
 # ARMA(1,1) model parameters 0.8,0.6 - calculating ACF and PACF
-ARMAacf(ar=c(0.8), ma=c(0.6), lag.max=6)
-ARMAacf(ar=c(0.8), ma=c(0.6), lag.max=6, pacf=TRUE)
+library(astsa)
+set.seed(42)
+x <- signal::filter(c(1, 0.6), c(1,-0.8), rnorm(5000))
+acf2(x, max.lag=8)
 
-# Simulating from the data to check empirical statistics
-x = signal::filter(c(1, 0.6), c(1, -0.8), rnorm(2000))
-x = arima.sim(n=2000, list(ar=c(0.8), ma=c(0.6)), sd=1)
-## either of the above approaches is fine
-tsplot(x, col=4)
+x <- arima.sim(n=5000,list(ar=c(0.8),ma=c(0.6)),sd=1)
+acf2(x, max.lag=8)
 
-# Empirical ACF and PACF
-acf2(x, max.lag=6)
+# Fitting an AR(3) model using moment matching, then least squares, then built-in arima function
+# Moment matching
+acfs <- acf(x, plot=FALSE, lag.max=3)$acf
+rho <- acfs[2:4]
+P <- toeplitz(acfs[1:3])
+phi <- solve(P, rho)
+phi
+
+# Least squares
+n <- length(x)
+X <- cbind(x[3:(n-1)], x[2:(n-2)], x[1:(n-3)])
+xp <- x[4:n]
+lm(xp ~ 0 + X)
+
+# Arima
+ar3 <- arima(x, c(3,0,0), include.mean = FALSE) 
+ar3
+ar3$coef
+
+# Plot ACF and PACF of model fitted by Arima
+# Fitted model
+barplot(ARMAacf(ar=ar3$coef, lag.max=8))
+barplot(ARMAacf(ar=ar3$coef, lag.max=8, pacf=TRUE))
+
+# True model
+barplot(ARMAacf(ar=c(0.8), ma=c(0.6), lag.max=8))
+barplot(ARMAacf(ar=c(0.8), ma=c(0.6), lag.max=8, pacf=TRUE))
+
+# Fit alternative models AR(2), AR(4), ARMA(1,1), ARMA(2,1)
+ar2 = arima(x, c(2, 0, 0), include.mean=FALSE)
+ar4 = arima(x, c(4, 0, 0), include.mean=FALSE)
+arma11 = arima(x, c(1, 0, 1), include.mean=FALSE)
+arma21 = arima(x, c(2, 0, 1), include.mean=FALSE)
