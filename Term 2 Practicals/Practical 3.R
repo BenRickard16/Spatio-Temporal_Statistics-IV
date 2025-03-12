@@ -125,16 +125,60 @@ str(midCsamp)
 play(midCsamp)
 saveSample(midCsamp, 'midC.wav', overwrite=TRUE)
 
-setWavPlayer(command='mplau32/play')
+
 
 # Instead could have generated tone
-midCs = Sine(262, 0.2)
+midCs <- Sine(262, 0.2)
 play(midCs)
 
 # Synthesise 2 pure notes separated by a gap
-tune = appendSample(Sine(262, 0.2), Silence(0.1, rate=freq), Sine(440, 0.3))
+tune <- appendSample(Sine(262, 0.2), Silence(0.1, rate=freq), Sine(440, 0.3))
 tune
 plot(tune)
+
+# More complicated tune
+semitone <- function(h, base = 440) base*2^(h/12)
+
+tune <- appendSample(
+  Sine(semitone(10), 0.2), Silence(0.1, rate=1440),
+  Sine(semitone(12), 0.2), Silence(0.1, rate=1440),
+  Sine(semitone(8), 0.2), Silence(0.1, rate=1440),
+  Sine(semitone(-4), 0.2), Silence(0.1, rate=1440),
+  Sine(semitone(3), 0.4)
+)
+
+play(tune)
+saveSample(tune, 'tune1.wav', overwrite=TRUE)
+
+
+# Touche-Tone Phones
+# Tone for number 1
+one <- 0.5*(Sine(697, 0.2) + Sine(1209, 0.2))
+plot(one)
+plot(one[1:1000])
+
+# Checking the DFT of sample
+data <- sound(one)[1,]
+spec <- abs(fft(data))
+plot(ts(spec), col=3)
+plot(ts(spec[1:500]), col=3)
+
+# Cut-off frequency 1kHz corresponds to index
+1000 * length(data) / freq
+
+# Row index
+which.max(spec[1:200])
+
+# Column index
+200 + which.max(spec[201:500])
+
+# Correspond to actual frequencies
+139 * freq / length(data)
+242 * freq / length(data)
+
+
+
+
 
 
 
