@@ -121,7 +121,7 @@ mean(revtseries)
 var(revtseries)
 
 # Computing first few auto-correlations of the process
-acf(revtseries, lag.max=50, plot=FALSE)
+acf(revtseries, lag.max=5, plot=FALSE)
 
 
 
