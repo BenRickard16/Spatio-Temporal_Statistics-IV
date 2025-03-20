@@ -3,7 +3,7 @@
 
 ## 1. Introduction to Time Series
 # Using library 'astsa'
-install.packages('astsa')
+# install.packages('astsa')
 library(astsa)
 
 # Chicken dataset
@@ -136,6 +136,7 @@ abline(h=0, col=3)
 Phi = matrix(c(1.5,-0.75,1,0), ncol=2, byrow=TRUE)
 evals = eigen(Phi)$values
 abs(evals)
+polyroot(c(1, -1.5, 0.75))
 
 # Empirical ACF of simulated data
 acf1(x)
@@ -633,13 +634,5 @@ so = ts(so, start(y), freq=frequency(y))
 tsplot(y, col=4, lwd=1.5, main="SOI")
 lines(ss$s[,1], col=3, lwd=1.5)
 lines(so, col=2)
-
-
-
-
-
-
-
-
 
 

@@ -45,7 +45,7 @@ We will begin with some simple smoothing of the time series data to reveal possi
 tsplot(lso2, col=4, lwd=0.5,
 	main="log of sulphur dioxide concentration")
 ## YOUR CODE FOR 1.1 HERE:
-lines(filter(lso2, c(1/24,rep(1/12, 12),1/24)), col=2, lwd=2)
+lines(filter(lso2, c(1/24,rep(1/12, 10),1/24)), col=2, lwd=2)
 
 ```
 This hints at a gradual downward trend with some annual seasonality.

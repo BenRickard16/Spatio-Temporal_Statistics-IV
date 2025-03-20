@@ -1,0 +1,239 @@
+---
+output:
+  pdf_document: default
+  html_document: default
+---
+
+# MATH4341 - Spatio-temporal statistics
+
+### Term 2: Temporal modelling and time series analysis
+
+## Summative computer practical test - March 2025
+
+Name: **YOUR NAME**
+
+### Overview
+
+This test document is an [R Markdown](https://rmarkdown.rstudio.com/) file. It should be downloaded to your computer, and then loaded up into RStudio. Follow the instructions provided, writing code to solve the required problems into the provided code blocks, as directed. Regularly check on progress by "knitting" the document to a PDF and checking that the output is correct. You may find it helpful to have a separate R session window for writing, testing and debugging code solutions, before pasting back into the markdown document - that is up to you. But do make sure that all of your solutions are in this markdown document, in the indicated code blocks, and that the document compiles into a PDF correctly. At the end of the test, compile your completed document to a PDF file and upload the PDF file (only) to Gradescope for marking.
+
+This test is to be taken in exam conditions, in silence. However, you may access usual on-line help facilities within RStudio, and consult any materials associated with this module, including the [lecture notes](https://darrenjw.github.io/time-series/).
+
+Although the test is nominally 2 hours, it probably shouldn't take more than 90 minutes to complete. When you are finished, upload your file to Gradescope and leave quietly. You do not need to stay until the end of the session.
+
+*There are FOUR questions on the test, and they are equally weighted.*
+
+### Modelling a particulate concentration time series
+
+This test focuses on modelling a time series of particulate concentration (`astsa::part`). We will work with the square root of the raw data, since this is more Gaussian.
+```{r}
+library(astsa)
+spart = sqrt(part) # spart is the time series of interest
+tsplot(spart, col=4, lwd=0.5,
+       main="Square root of particulate concentration")
+tsp(spart)
+n = length(spart)
+n
+```
+
+## Q1.
+
+### Smoothing
+
+We will begin with an exploratory analysis, smoothing the data to better reveal the underlying patterns in the data. 
+
+### 1.1
+
+On the plot below, overlay in red (with thickness 2) a 15-week moving-average smoothing of the data. Then overlay a smoothing based on a one-year (52-week) moving average (in green, with thickness 2).
+```{r}
+tsplot(spart, col=4, lwd=0.5,
+       main="Square root of particulate concentration")
+## YOUR CODE FOR 1.1 HERE:
+y1 <- filter(spart, c(rep(1/15, 15)))
+y2 <- filter(spart, c(rep(1/52, 52)))
+
+lines(y1, col='red', lwd=2)
+lines(y2, col='green', lwd=2)
+```
+
+### 1.2
+
+Next we will use the DFT/FFT to smooth the data by just keeping the low frequency components of the time series and discarding the rest. On the plot below, overlay in green (thickness 2) a smoothing based on keeping just the first 3 harmonics, and in red (thickness 2), a smoothing based on the first 10 harmonics.
+```{r}
+tsplot(spart, col=4, lwd=0.5,
+       main="Square root of particulate concentration")
+## An inverse FFT function is likely to be useful
+ifft = function(x) fft(x, inverse=TRUE) / length(x)
+## YOUR CODE FOR 1.2 HERE:
+ft = fft(spart)
+
+ft[5:length(ft)]=0    # Note start at 5 since first index in ft is a_0
+sm1 = Re(ifft(ft))
+
+ft = fft(spart)
+ft[12:length(ft)]=0
+sm2 = Re(ifft(ft))
+
+lines(sm1, col = 'green', lwd=2)
+lines(sm2, col='red', lwd=2)
+
+```
+
+## Q2.
+
+### DLM fitting
+
+We see that there is evidence of strong, but time-varying, annual seasonality. We now use the `dlm` package to fit a DLM to this data. Since the overall trend is weak, and the strong seasonality looks like it could be captured with a small number of harmonics, we will start by fitting a locally constant DLM with trigonometric seasonality based on just two harmonics.
+
+### 2.1
+Use the method of maximum likelihood to estimate the variance components of the model. You may want to assume a common variance for the harmonic components. You may also want to exploit a log-link to ensure that your optimisation problem is unconstrained. Make sure that your optimised variance components are clearly displayed in your output on their natural scale.
+
+### 2.2
+Using your optimised model, compute the smoothed estimates of the hidden state. Then on the time series, overlay in green (and thickness 2) the smoothed estimate of the local level.
+
+### 2.3
+Overlay in red (and thickness 2) the smoothed estimate of the observation process (including both the local level and the seasonal component). This should look qualitatively similar to the smoothings you did for Q1.
+```{r}
+library(dlm)
+tsplot(spart, col=4, lwd=0.5,
+       main="Square root of particulate concentration")
+
+## YOUR CODE FOR 2.1 HERE:
+buildMod = function(lpar)
+  dlmModPoly(1, dV=exp(lpar[1]), dW=exp(lpar[2])) +
+  dlmModTrig(52, 2, dV=0, dW=rep(exp(lpar[3]), 6))
+
+opt = dlmMLE(spart, parm=log(c(100, 1, 1)),
+             build=buildMod)
+opt
+exp(opt$par)
+
+tsplot(spart, col=4, lwd=0.5,
+       main="Square root of particulate concentration")
+## YOUR CODE FOR 2.2 HERE:
+mod = buildMod(opt$par)
+ss = dlmSmooth(spart, mod)
+
+lines(ss$s[,1], col='green', lwd=2)
+
+## YOUR CODE FOR 2.3 HERE:
+so = ss$s[-1,] %*% t(mod$FF) # smoothed observations
+so = ts(so, start(spart), frequency = frequency(spart))
+lines(so, col='red', lwd=2)
+
+```
+
+## Q3.
+
+### Forecasting
+
+Now that we are happy that we have a model that seems to fit the data reasonably well, we can turn our attention to forecasting. Suppose that we want to forecast particulate levels for three years following the end of the time series.
+
+### 3.1
+
+Using your optimised model, construct forecasts for the next three years, and overlay them on the plot below (in red, with a thickness of two). Also add appropriate upper and lower forecast uncertainty intervals.
+```{r}
+## YOUR CODE FOR 3.1 HERE:
+fit = dlmFilter(spart, mod)
+fore = dlmForecast(fit, 52*3) # forecast 3 years time points
+pred = ts(c(tail(spart, 1), fore$f), 
+          start=end(spart), frequency=frequency(spart))
+upper = ts(c(tail(spart, 1), fore$f + 2*sqrt(unlist(fore$Q))), 
+           start=end(spart), frequency=frequency(spart))
+lower = ts(c(tail(spart, 1), fore$f - 2*sqrt(unlist(fore$Q))), 
+           start=end(spart), frequency=frequency(spart))
+
+tsplot(spart, col=4, lwd=0.5, xlim=c(tsp(spart)[1], tsp(spart)[2]+3),
+       main="Square root of particulate concentration")
+lines(pred, col='red', lwd=2)
+lines(upper, col='red', lwd=2, lty=2)
+lines(lower, col='red', lwd=2, lty=2)
+
+```
+
+### 3.2
+
+This model seems to fit and forecast reasonably well, but it is very simple. One way to try and assess the adequacy of the model would be to study the residuals. By subtracting the smoothed observations from the actual observations, produce a time series of residuals and plot it. Also plot the ACF and PACF of the residuals.
+```{r}
+## YOUR CODE FOR 3.2 HERE
+res = ts(spart - so, frequency=frequency(spart), start = start(spart))
+tsplot(res, col='4', lwd='1', main='Residuals of the model')
+
+acf2(res)
+```
+
+## Q4.
+
+### Model refinement
+
+Encouragingly, the residuals look reasonably stationary, with relatively little auto-correlation. So it probably wouldn't be completely unreasonable to accept this model as adequate. However, there is a small amount of auto-correlation in the residuals, suggesting a slight model inadequacy. The locally constant model for the overall trend is reasonable, but leads to forecasts that fail to reflect the slightly upward trend in the data towards the end of the series. So we should perhaps upgrade the trend model to locally linear, and we could also add another harmonic to the seasonal component, in case that is also an issue. So, *our new model will have a locally linear trend, plus trigonometric seasonality with three harmonics*.
+
+### 4.1
+Fit this new model, using the method of maximum likelihood to determine the variance components. You might want to use your previously optimised parameters to inform your initial guess for the parameters of the new model.
+
+### 4.2
+Overlay the smoothed trend and smoothed observations on the plot below to produce the equivalent smoothing plot to the one you produced earlier.
+```{r}
+	   
+## YOUR CODE FOR 4.1 HERE:
+buildMod = function(lpar)
+  dlmModPoly(2, dV=exp(lpar[1]), dW=exp(lpar[2:3])) +
+  dlmModTrig(52, 3, dV=0, dW=rep(exp(lpar[4]), 6))
+
+opt = dlmMLE(spart, parm=log(c(10, 1, 1, 1)),
+             build=buildMod)
+opt
+exp(opt$par)
+
+## YOUR CODE FOR 4.2 HERE:
+tsplot(spart, col=4, lwd=0.5,
+       main="Square root of particulate concentration")
+mod = buildMod(opt$par)
+ss = dlmSmooth(spart, mod)
+lines(ss$s[,1], col='green', lwd=2)
+
+so = ss$s[-1,] %*% t(mod$FF) # smoothed observations
+so = ts(so, start(spart), frequency = frequency(spart))
+lines(so, col='red', lwd=2)
+
+```
+The smoothed values look similar to before, but with an even smoother long term trend, which seems nice. But the estimate of observational variance is very similar, suggesting that the fit isn't significantly better. What about the forecasts?
+
+### 4.3
+Reproduce the forecast plot for the new model.
+```{r}
+tsplot(spart, col=4, lwd=0.5, xlim=c(tsp(spart)[1], tsp(spart)[2]+3),
+       ylim=c(4, 11), main="Square root of particulate concentration")
+## YOUR CODE FOR 4.3 HERE:
+fit = dlmFilter(spart, mod)
+fore = dlmForecast(fit, 52*3) # forecast 16 time points
+pred = ts(c(tail(spart, 1), fore$f), 
+          start=end(spart), frequency=frequency(spart))
+upper = ts(c(tail(spart, 1), fore$f + 2*sqrt(unlist(fore$Q))), 
+           start=end(spart), frequency=frequency(spart))
+lower = ts(c(tail(spart, 1), fore$f - 2*sqrt(unlist(fore$Q))), 
+           start=end(spart), frequency=frequency(spart))
+
+lines(pred, col='red', lwd=2)
+lines(upper, col='red', lwd=2, lty=2)
+lines(lower, col='red', lwd=2, lty=2)
+
+```
+The forecasts perhaps look a bit more intuitively reasonable. But is this new model more adequate than the previous model? In particular, are the residuals more plausibly iid?
+
+### 4.4
+Reproduce the residuals time series plot for this new model, and the corresponding ACF and PACF plots.
+```{r}
+## YOUR CODE FOR 4.4 HERE
+res = ts(spart - so, frequency=frequency(spart), start = start(spart))
+tsplot(res, col='4', lwd='1', main='Residuals of the model')
+
+acf2(res)
+
+```
+The residuals are actually very similar to they were previously. But at this point it seems as though we have a model that fits pretty well and gives intuitively reasonable forecasts and forecast intervals, so we will conclude the analysis here.
+
+### The end
+
+The test is now complete. If you have completed all of the code blocks as required, you should check that you can compile this completed file into a PDF file, and that the PDF file looks correct. Then upload your compiled PDF file (only) to Gradescope for marking. Once you have uploaded your PDF to Gradescope, you may leave quietly. You do not need to stay until the end of the session.
+
+
